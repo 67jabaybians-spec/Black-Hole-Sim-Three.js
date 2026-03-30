@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Black Hole Simulation</title>
+  <style>
+    * { margin: 0; padding: 0; overflow: hidden; }
+    body { background: #000; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    camera.position.z = 5;
+
+    // Load space background
+    const textureLoader = new THREE.TextureLoader();
+    const spaceTexture = textureLoader.load('https://raw.githubusercontent.com/creativetimofficial/public-assets/master/astro-assets/images/particles/space.jpg');
+
+    // Shader material for black hole
+    const fragmentShader = `
+      uniform sampler2D uSpaceTexture;
+      uniform vec2 uResolution;
+      uniform float uTime;
+
+      varying vec2 vUv;
+
+      // Simulate Schwarzschild black hole lensing
+      void main() {
+        vec2 uv = vUv;
+        vec2 fragCoord = uv * uResolution;
+        vec2 center = uResolution * 0.5;
+        vec2 direction = fragCoord - center;
+        float dist = length(direction);
+
+        // Gravitational lensing effect
+        float strength = 0.2;
+        float radius = 0.2 * uResolution.x;
+        if (dist < radius) {
+          // Inside event horizon → black
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+          return;
+        }
+
+        // Bend light around black hole
+        float bend = pow(radius / dist, 3.0) * strength;
+        vec2 sampleCoord = direction * (1.0 + bend);
+        vec2 texCoord = (center + sampleCoord) / uResolution;
+
+        vec3 color = texture2D(uSpaceTexture, texCoord).rgb;
+
+        // Accretion disk (simplified)
+        float angle = atan(direction.y, direction.x);
+        float pulse = sin(angle * 10.0 + uTime) * 0.5 + 0.5;
+        float disk = smoothstep(0.25, 0.26, dist) - smoothstep(0.35, 0.36, dist);
+        disk *= pulse;
+        color += vec3(1.0, 0.3, 0.1) * disk * 2.0;
+
+        gl_FragColor = vec4(color, 1.0);
+      }
+    `;
+
+    const vertexShader = `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        uSpaceTexture: { value: spaceTexture },
+        uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+        uTime: { value: 0.0 }
+      },
+      fragmentShader,
+      vertexShader,
+    });
+
+    const plane = new THREE.PlaneGeometry(2, 2);
+    const mesh = new THREE.Mesh(plane, material);
+    scene.add(mesh);
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      material.uniforms.uTime.value += 0.01;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize handler
+    window.addEventListener('resize', () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      renderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      material.uniforms.uResolution.value.set(width, height);
+    });
+  </script>
+</body>
+</html>   
