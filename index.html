@@ -130,7 +130,7 @@ vec3 raymarch(vec3 ro, vec3 rd, out float disk){
       float hr = length(hit.xz);
       if(hr > 1.0 && hr < 2.5){
         float glow = 1.0 / hr;
-        disk = glow * (0.6 + 0.4*sin(uTime + hr*5.0));
+        disk = glow * 0.3;
       }
     }
   }
@@ -203,7 +203,9 @@ const mat = new THREE.PointsMaterial({
   color: 0x00ffff,
   size: 0.02,
   transparent: true,
-  opacity: 0.8
+  opacity: 0.4,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
 });
 
 const particles = new THREE.Points(geo, mat);
@@ -226,7 +228,7 @@ function animate(){
 
   material.uniforms.uTime.value += 0.01;
 
-  particles.rotation.y += 0.002;
+  particles.rotation.x = 0.4;
 
   composer.render();
 }
