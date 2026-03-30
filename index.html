@@ -50,37 +50,72 @@
       uniform sampler2D uSpaceTexture;
       uniform vec2 uResolution;
       uniform float uTime;
-
+      
       varying vec2 vUv;
-
+      
+      // Hash function for procedural stars
+      float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+      }
+      
+      // Star field
+      float stars(vec3 dir) {
+        vec2 uv = dir.xy / dir.z;
+        uv += floor(uTime * 0.1);
+        vec2 grid = floor(uv * 20.0);
+        vec2 frac = fract(uv * 20.0);
+        float h = hash(grid);
+        vec2 star = 0.5 + 0.5 * sin(h + uTime + grid.xyx).xy;
+        float dist = length(frac - star);
+        return smoothstep(0.05, 0.0, dist) * (0.8 + 0.2 * sin(h * 100.0));
+      }
+      
+      // Black hole raymarch
+      vec3 raymarch(vec3 ro, vec3 rd) {
+        float M = 1.0; // Black hole mass
+        vec3 p = ro;
+        float h2 = pow(length(cross(p, rd)), 2.0); // Angular momentum squared
+      
+        for (int i = 0; i < 64; i++) {
+          float r = length(p);
+          if (r < 1.0) break; // Inside event horizon (rs = 2M = 2 → use 1 for margin)
+      
+          // Schwarzschild geodesic acceleration
+          vec3 acc = -1.5 * h2 * p / pow(r, 6.0);
+          p += rd * 0.1 + acc * 0.01;
+        }
+      
+        return p;
+      }
+      
       void main() {
         vec2 uv = vUv;
-        vec2 fragCoord = uv * uResolution;
-        vec2 center = uResolution * 0.5;
-        vec2 direction = fragCoord - center;
-        float dist = length(direction);
-
-        float strength = 0.2;
-        float radius = 0.2 * uResolution.x;
-        if (dist < radius) {
-          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-          return;
+        vec2 fragCoord = (uv - 0.5) * 2.0;
+      
+        vec3 ro = vec3(0, 0, 5);
+        vec3 rd = normalize(vec3(fragCoord, -1));
+      
+        vec3 pos = raymarch(ro, rd);
+        float r = length(pos);
+      
+        // Sample background
+        vec3 bg = texture2D(uSpaceTexture, (atan(pos.x, pos.z) * 0.1591, asin(pos.y) * 0.3183) + 0.5).rgb;
+        bg += stars(normalize(pos));
+      
+        // Accretion disk (at y = 0, between r = 1.5 and 3.0)
+        float disk = 0.0;
+        if (abs(pos.y) < 0.02 && r > 1.5 && r < 3.0) {
+          float phi = atan(pos.x, pos.z);
+          float temp = pow(r, -0.75); // T ∝ r^(-3/4)
+          float pulse = sin(phi * 10.0 + uTime) * 0.5 + 0.5;
+          disk = 2.0 * temp * pulse;
+          disk *= smoothstep(0.02, 0.01, abs(pos.y));
         }
-
-        float bend = pow(radius / dist, 3.0) * strength;
-        vec2 sampleCoord = direction * (1.0 + bend);
-        vec2 texCoord = (center + sampleCoord) / uResolution;
-
-        vec3 color = texture2D(uSpaceTexture, texCoord).rgb;
-
-        float angle = atan(direction.y, direction.x);
-        float pulse = sin(angle * 10.0 + uTime) * 0.5 + 0.5;
-        float disk = smoothstep(0.25, 0.26, dist) - smoothstep(0.35, 0.36, dist);
-        disk *= pulse;
-        color += vec3(1.0, 0.3, 0.1) * disk * 2.0;
-
+      
+        vec3 color = bg + vec3(1.0, 0.3, 0.1) * disk;
+      
         gl_FragColor = vec4(color, 1.0);
-      }
+      }   
     `;
 
     const vertexShader = `
