@@ -127,6 +127,10 @@ const material = new THREE.ShaderMaterial({
         // Move forward
         p += rd * stepSize;
       }
+
+      // Tangential bending (THIS creates the wrap-around effect)
+      vx += -z * 0.0005;
+      vz +=  x * 0.0005;
     
       // Color (energy style)
       vec3 color = vec3(0.0);
@@ -223,7 +227,7 @@ function animate(){
 
     const d = Math.sqrt(x*x + y*y + z*z);
 
-    const force = 0.0005 / (d*d + 0.1);
+    const force = 0.002 / (d*d + 0.05);
 
     vx -= x * force;
     vy -= y * force;
@@ -236,9 +240,11 @@ function animate(){
     y += vy;
     z += vz;
 
-    if (d < 0.5) {
+    if (d < 0.8) {
       const r = 2 + Math.random() * 2;
       const a = Math.random() * Math.PI * 2;
+      // Fade based on Z (behind the hole)
+      const fade = Math.max(0, 1.0 - (z + 1.0) * 0.5);
 
       x = Math.cos(a) * r;
       z = Math.sin(a) * r;
@@ -247,6 +253,10 @@ function animate(){
       vx = -z * 0.01;
       vz = x * 0.01;
       vy = 0;
+
+      // spiral faster near the hole
+      vx *= 1.02;
+      vz *= 1.02;     
     }
 
     pos[ix] = x;
@@ -261,6 +271,8 @@ function animate(){
   geo.attributes.position.needsUpdate = true;
 
   composer.render();
+
+  particles.material.opacity = 0.3 + 0.3 * Math.sin(material.uniforms.uTime.value);
 }
 
 animate();
