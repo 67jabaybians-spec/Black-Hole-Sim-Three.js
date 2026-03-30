@@ -78,22 +78,34 @@
       }   
       
       // Black hole raymarch
-      vec3 raymarch(vec3 ro, vec3 rd) {
-        float M = 1.0; // Black hole mass
+      vec3 raymarch(vec3 ro, vec3 rd, out float diskColor) {
+        diskColor = 0.0;
         vec3 p = ro;
-        float h2 = pow(length(cross(p, rd)), 2.0); // Angular momentum squared
+        float h2 = pow(length(cross(p, rd)), 2.0);
       
         for (int i = 0; i < 64; i++) {
           float r = length(p);
-          if (r < 1.0) break; // Inside event horizon (rs = 2M = 2 → use 1 for margin)
+          if (r < 1.0) return vec3(0); // Inside horizon
       
-          // Schwarzschild geodesic acceleration
           vec3 acc = -1.5 * h2 * p / pow(r, 6.0);
+          vec3 prev = p;
           p += rd * 0.1 + acc * 0.01;
-        }
       
+          // Detect Y=0 plane crossing
+          if (prev.y * p.y < 0.0) {
+            float t = -prev.y / (p.y - prev.y);
+            vec3 hit = prev + t * (p - prev);
+            float hr = length(hit.xz);
+            if (hr > 1.5 && hr < 3.0) {
+              float phi = atan(hit.x, hit.z);
+              float temp = pow(hr, -0.75);
+              float pulse = sin(phi * 10.0 + uTime) * 0.5 + 0.5;
+              diskColor = 2.0 * temp * pulse;
+            }
+          }
+        }
         return p;
-      }
+      }   
       
       void main() {
         vec2 uv = vUv;
@@ -102,33 +114,19 @@
         vec3 ro = vec3(0, 0, 5);
         vec3 rd = normalize(vec3(fragCoord, -1));
       
-        vec3 pos = raymarch(ro, rd);
-        float r = length(pos);
+        float diskColorVal;
+        vec3 pos = raymarch(ro, rd, diskColorVal);
       
-        // Sample stars using the bent ray direction
-        vec3 starColor = vec3(stars(rd)); // Use original rd for now (improve later)
+        // Sample stars using bent direction
+        vec3 starDir = normalize(pos - ro);
+        vec3 starColor = vec3(stars(starDir));
       
-        // Improve star sampling: use warped direction
-        vec3 warpedDir = normalize(pos - ro);
-        starColor = vec3(stars(warpedDir));
-      
-        // Accretion disk
-        float disk = 0.0;
-        if (abs(pos.y) < 0.02 && r > 1.5 && r < 3.0) {
-          float phi = atan(pos.x, pos.z);
-          float temp = pow(r, -0.75);
-          float pulse = sin(phi * 10.0 + uTime) * 0.5 + 0.5;
-          disk = 2.0 * temp * pulse;
-          disk *= smoothstep(0.02, 0.01, abs(pos.y));
-        }
-      
-        // Fix blue ring: use orange-red accretion disk
-        vec3 diskColor = vec3(1.0, 0.3, 0.1) * disk; // Not blue!
-      
-        vec3 color = starColor + diskColor;
+        // Blackbody color
+        vec3 diskCol = mix(vec3(1.0, 0.3, 0.1), vec3(1.0, 0.8, 0.4), pow(3.0 - length(pos.xz), 0.2));
+        vec3 color = starColor + diskCol * diskColorVal;
       
         gl_FragColor = vec4(color, 1.0);
-      }        
+      }          
     `;
 
     const vertexShader = `
