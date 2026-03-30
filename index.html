@@ -6,6 +6,7 @@
   <style>
     * { margin: 0; padding: 0; overflow: hidden; }
     body { background: #000; }
+    #gui { position: absolute; top: 10px; left: 10px; z-index: 10; }
   </style>
   <script type="importmap">
     {
@@ -16,17 +17,29 @@
   </script>
 </head>
 <body>
+  <div id="gui"></div>
   <script type="module">
     import * as THREE from 'three';
+    import { EffectComposer } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'https://unpkg.com/three@0.160.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+    import { GUI } from 'https://unpkg.com/three@0.160.0/examples/jsm/libs/lil-gui.module.min.js';
 
     // Scene setup
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.appendChild(renderer.domElement);
 
     camera.position.z = 5;
+
+    // Post-processing
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+    composer.addPass(bloomPass);
 
     // Load space background
     const textureLoader = new THREE.TextureLoader();
@@ -40,7 +53,6 @@
 
       varying vec2 vUv;
 
-      // Simulate Schwarzschild black hole lensing
       void main() {
         vec2 uv = vUv;
         vec2 fragCoord = uv * uResolution;
@@ -48,23 +60,19 @@
         vec2 direction = fragCoord - center;
         float dist = length(direction);
 
-        // Gravitational lensing effect
         float strength = 0.2;
         float radius = 0.2 * uResolution.x;
         if (dist < radius) {
-          // Inside event horizon → black
           gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
           return;
         }
 
-        // Bend light around black hole
         float bend = pow(radius / dist, 3.0) * strength;
         vec2 sampleCoord = direction * (1.0 + bend);
         vec2 texCoord = (center + sampleCoord) / uResolution;
 
         vec3 color = texture2D(uSpaceTexture, texCoord).rgb;
 
-        // Accretion disk (simplified)
         float angle = atan(direction.y, direction.x);
         float pulse = sin(angle * 10.0 + uTime) * 0.5 + 0.5;
         float disk = smoothstep(0.25, 0.26, dist) - smoothstep(0.35, 0.36, dist);
@@ -97,11 +105,33 @@
     const mesh = new THREE.Mesh(plane, material);
     scene.add(mesh);
 
+    // Particle system
+    const particleCount = 10000;
+    const positions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const r = 0.5 + Math.random() * 1.5;
+      const theta = Math.random() * Math.PI * 2;
+      positions[i * 3] = r * Math.cos(theta);
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 0.1;
+      positions[i * 3 + 2] = r * Math.sin(theta);
+    }
+    const particleGeom = new THREE.BufferGeometry();
+    particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const particleMaterial = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.02, transparent: true, opacity: 0.8 });
+    const particleSystem = new THREE.Points(particleGeom, particleMaterial);
+    scene.add(particleSystem);
+
+    // GUI
+    const gui = new GUI({ container: document.getElementById('gui') });
+    gui.add(material.uniforms.uTime, 'value', 0, 10, 0.01).name('Time');
+    gui.add(bloomPass, 'strength', 0, 3, 0.01).name('Bloom Strength');
+
     // Animation loop
     function animate() {
       requestAnimationFrame(animate);
       material.uniforms.uTime.value += 0.01;
-      renderer.render(scene, camera);
+      particleSystem.rotation.z -= 0.0005;
+      composer.render();
     }
     animate();
 
@@ -113,6 +143,7 @@
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       material.uniforms.uResolution.value.set(width, height);
+      composer.setSize(width, height);
     });
   </script>
 </body>
