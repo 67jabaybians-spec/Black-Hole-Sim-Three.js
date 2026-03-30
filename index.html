@@ -105,13 +105,12 @@
         vec3 pos = raymarch(ro, rd);
         float r = length(pos);
       
-        // Sample background using bent ray direction
-        vec3 bg = texture2D(uSpaceTexture, vec2(atan(pos.x, pos.z), pos.y) * 0.159 + 0.5).rgb;
-        
-        // Add procedural stars
-        vec3 starDir = normalize(vec3(fragCoord, -1));
-        float star = stars(pos); // Use final position to sample warped stars
-        bg += vec3(star * 1.5);
+        // Sample stars using the bent ray direction
+        vec3 starColor = vec3(stars(rd)); // Use original rd for now (improve later)
+      
+        // Improve star sampling: use warped direction
+        vec3 warpedDir = normalize(pos - ro);
+        starColor = vec3(stars(warpedDir));
       
         // Accretion disk
         float disk = 0.0;
@@ -123,10 +122,13 @@
           disk *= smoothstep(0.02, 0.01, abs(pos.y));
         }
       
-        vec3 color = bg + vec3(1.0, 0.3, 0.1) * disk;
+        // Fix blue ring: use orange-red accretion disk
+        vec3 diskColor = vec3(1.0, 0.3, 0.1) * disk; // Not blue!
+      
+        vec3 color = starColor + diskColor;
       
         gl_FragColor = vec4(color, 1.0);
-      }      
+      }        
     `;
 
     const vertexShader = `
