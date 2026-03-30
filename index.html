@@ -98,7 +98,7 @@ float hash(vec2 p){
 }
 
 float stars(vec3 dir){
-  vec2 uv = dir.xy / dir.z;
+  vec2 uv = dir.xy / max(dir.z, 0.2);
   uv *= 80.0;
   vec2 grid = floor(uv);
   vec2 frac = fract(uv);
@@ -147,6 +147,7 @@ void main(){
   vec3 pos = raymarch(ro, rd, disk);
 
   vec3 dir = normalize(pos - ro);
+  dir.z = max(dir.z, 0.2);
 
   vec2 bgUV = dir.xy * 0.5 + 0.5;
   vec3 bg = texture2D(uSpaceTexture, bgUV).rgb;
@@ -171,7 +172,9 @@ const material = new THREE.ShaderMaterial({
     uSpaceTexture: { value: spaceTexture }
   },
   vertexShader,
-  fragmentShader
+  fragmentShader,
+  depthWrite: false,
+  depthTest: false
 });
 
 const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
