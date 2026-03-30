@@ -61,14 +61,21 @@
       // Star field
       float stars(vec3 dir) {
         vec2 uv = dir.xy / dir.z;
-        uv += floor(uTime * 0.1);
-        vec2 grid = floor(uv * 20.0);
-        vec2 frac = fract(uv * 20.0);
+        uv *= 100.0; // Scale for density
+        vec2 grid = floor(uv);
+        vec2 frac = fract(uv);
+      
+        // Hash for random star brightness
         float h = hash(grid);
-        vec2 star = 0.5 + 0.5 * sin(h + uTime + grid.xyx).xy;
-        float dist = length(frac - star);
-        return smoothstep(0.05, 0.0, dist) * (0.8 + 0.2 * sin(h * 100.0));
-      }
+        vec2 offset = vec2(h, hash(grid + 1.0));
+        vec2 starPos = fract(offset * 100.0);
+      
+        float dist = length(frac - starPos);
+        float size = smoothstep(0.05, 0.0, dist);
+        float brightness = size * (0.5 + 0.5 * sin(h * 100.0 + uTime * 0.1));
+      
+        return brightness;
+      }   
       
       // Black hole raymarch
       vec3 raymarch(vec3 ro, vec3 rd) {
@@ -98,15 +105,19 @@
         vec3 pos = raymarch(ro, rd);
         float r = length(pos);
       
-        // Sample background
-        vec3 bg = texture2D(uSpaceTexture, (atan(pos.x, pos.z) * 0.1591, asin(pos.y) * 0.3183) + 0.5).rgb;
-        bg += stars(normalize(pos));
+        // Sample background using bent ray direction
+        vec3 bg = texture2D(uSpaceTexture, vec2(atan(pos.x, pos.z), pos.y) * 0.159 + 0.5).rgb;
+        
+        // Add procedural stars
+        vec3 starDir = normalize(vec3(fragCoord, -1));
+        float star = stars(pos); // Use final position to sample warped stars
+        bg += vec3(star * 1.5);
       
-        // Accretion disk (at y = 0, between r = 1.5 and 3.0)
+        // Accretion disk
         float disk = 0.0;
         if (abs(pos.y) < 0.02 && r > 1.5 && r < 3.0) {
           float phi = atan(pos.x, pos.z);
-          float temp = pow(r, -0.75); // T ∝ r^(-3/4)
+          float temp = pow(r, -0.75);
           float pulse = sin(phi * 10.0 + uTime) * 0.5 + 0.5;
           disk = 2.0 * temp * pulse;
           disk *= smoothstep(0.02, 0.01, abs(pos.y));
@@ -115,7 +126,7 @@
         vec3 color = bg + vec3(1.0, 0.3, 0.1) * disk;
       
         gl_FragColor = vec4(color, 1.0);
-      }   
+      }      
     `;
 
     const vertexShader = `
